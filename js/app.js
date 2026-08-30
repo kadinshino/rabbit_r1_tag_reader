@@ -7,17 +7,18 @@ const overlay = document.querySelector("#overlay");
 const workCanvas = document.querySelector("#workCanvas");
 const startBtn = document.querySelector("#startBtn");
 const copyBtn = document.querySelector("#copyBtn");
+const cameraCard = document.querySelector(".camera-card");
 const mode = document.querySelector("#mode");
 const family = document.querySelector("#family");
 const resultType = document.querySelector("#resultType");
 const resultValue = document.querySelector("#resultValue");
 const resultMeta = document.querySelector("#resultMeta");
 const cameraMessage = document.querySelector("#cameraMessage");
-const footerStatus = document.querySelector("#footerStatus");
-const statusDot = document.querySelector("#statusDot");
 
 let stream = null;
 let running = false;
+let starting = false;
+let userStopped = false;
 let lastResult = null;
 let scanBusy = false;
 let lastScan = 0;
@@ -31,6 +32,19 @@ function setResult(hit) {
   resultType.textContent = hit?.type ?? "—";
   resultValue.textContent = hit?.value ?? "Nothing scanned";
   resultMeta.textContent = hit?.meta ?? "Ready";
+}
+
+function setStatus(text) {
+  resultMeta.textContent = text;
+}
+
+function showMessage(text) {
+  if (text === null) {
+    cameraMessage.hidden = true;
+    return;
+  }
+  cameraMessage.textContent = text;
+  cameraMessage.hidden = false;
 }
 
 function drawHit(hit, sx, sy) {
@@ -53,10 +67,9 @@ function drawHit(hit, sx, sy) {
 }
 
 async function startCamera() {
-  if (running) {
-    stopCamera();
-    return;
-  }
+  if (running || starting) return;
+  starting = true;
+  showMessage("Starting camera…");
 
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -73,27 +86,34 @@ async function startCamera() {
 
     running = true;
     startBtn.textContent = "STOP";
-    cameraMessage.hidden = true;
-    statusDot.classList.add("live");
-    footerStatus.textContent = "Camera live";
+    showMessage(null);
+    setStatus("Scanning…");
     requestAnimationFrame(scanLoop);
   } catch (err) {
-    cameraMessage.hidden = false;
-    cameraMessage.textContent = "CAMERA BLOCKED";
-    footerStatus.textContent = err?.message || "Could not open camera";
+    stream?.getTracks().forEach(track => track.stop());
+    stream = null;
+    startBtn.textContent = "START";
+    showMessage("Camera unavailable — tap to retry");
+    setStatus(err?.message || "Could not open camera");
+  } finally {
+    starting = false;
   }
 }
 
 function stopCamera() {
+  userStopped = true;
   running = false;
   stream?.getTracks().forEach(track => track.stop());
   stream = null;
   video.srcObject = null;
   startBtn.textContent = "START";
-  cameraMessage.hidden = false;
-  cameraMessage.textContent = "Press START";
-  statusDot.classList.remove("live");
+  showMessage("Camera off");
   overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+}
+
+function toggleCamera() {
+  if (running) stopCamera();
+  else { userStopped = false; startCamera(); }
 }
 
 async function scanLoop(now) {
@@ -125,8 +145,8 @@ async function scanLoop(now) {
         const hit = hits[0];
         setResult(hit);
 
-        overlay.width = video.clientWidth || 320;
-        overlay.height = video.clientHeight || 240;
+        overlay.width = cameraCard.clientWidth || 320;
+        overlay.height = cameraCard.clientHeight || 240;
         drawHit(hit, overlay.width / width, overlay.height / height);
       } else {
         overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
@@ -141,36 +161,41 @@ async function scanLoop(now) {
   requestAnimationFrame(scanLoop);
 }
 
-startBtn.addEventListener("click", startCamera);
+startBtn.addEventListener("click", toggleCamera);
+
+// Tapping the preview retries a blocked/denied camera.
+cameraCard.addEventListener("click", () => {
+  if (!running) { userStopped = false; startCamera(); }
+});
 
 copyBtn.addEventListener("click", async () => {
   if (!lastResult) return;
   const text = `${lastResult.type}: ${lastResult.value}`;
   try {
     await navigator.clipboard.writeText(text);
-    footerStatus.textContent = "Copied";
+    setStatus("Copied");
   } catch {
-    footerStatus.textContent = text;
+    setStatus(text);
   }
 });
 
 installR1Controls({
-  onClick: startCamera,
+  onClick: toggleCamera,
   onScrollUp: () => {
-    const next = Math.max(0, family.selectedIndex - 1);
-    family.selectedIndex = next;
+    family.selectedIndex = Math.max(0, family.selectedIndex - 1);
   },
   onScrollDown: () => {
-    const next = Math.min(family.options.length - 1, family.selectedIndex + 1);
-    family.selectedIndex = next;
+    family.selectedIndex = Math.min(family.options.length - 1, family.selectedIndex + 1);
   }
 });
 
-// Attempt to initialize optional AprilTag module without blocking QR.
-initAprilTag().then(ok => {
-  footerStatus.textContent = ok
-    ? "QR + tag36h11 ready"
-    : "QR ready • add AprilTag WASM for tag detection";
-});
+// Optional AprilTag module loads in the background; QR keeps working either way.
+initAprilTag();
 
 setResult(null);
+
+// Open the camera as soon as the app loads.
+startCamera();
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && !running && !userStopped) startCamera();
+});

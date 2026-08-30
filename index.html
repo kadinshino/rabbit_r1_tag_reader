@@ -9,18 +9,10 @@
 </head>
 <body>
   <main class="app">
-    <header>
-      <div>
-        <div class="eyebrow">R1 TOOL</div>
-        <h1>Tag Reader</h1>
-      </div>
-      <div id="statusDot" class="status-dot" title="status"></div>
-    </header>
-
     <section class="camera-card">
-      <video id="video" playsinline muted></video>
+      <video id="video" playsinline muted autoplay></video>
       <canvas id="overlay"></canvas>
-      <div id="cameraMessage" class="camera-message">Press START</div>
+      <div id="cameraMessage" class="camera-message">Starting camera…</div>
     </section>
 
     <section class="controls">
@@ -42,18 +34,15 @@
     </section>
 
     <section class="result-card">
-      <div class="label">LAST DETECTION</div>
       <div id="resultType" class="result-type">—</div>
       <div id="resultValue" class="result-value">Nothing scanned</div>
       <div id="resultMeta" class="result-meta">Ready</div>
     </section>
 
     <section class="actions">
-      <button id="startBtn">START</button>
+      <button id="startBtn">STOP</button>
       <button id="copyBtn" class="secondary">COPY</button>
     </section>
-
-    <footer id="footerStatus">QR ready • AprilTag module optional</footer>
   </main>
 
   <canvas id="workCanvas" hidden></canvas>

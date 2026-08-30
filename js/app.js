@@ -1,6 +1,6 @@
-import { detectQR } from "./detectors/qr.js?v=2";
-import { initAprilTag, detectAprilTags, isAprilTagReady, BUILD_FAMILY } from "./detectors/apriltag.js?v=2";
-import { installR1Controls } from "./r1.js?v=2";
+import { detectQR } from "./detectors/qr.js?v=3";
+import { initAprilTag, detectAprilTags, isAprilTagReady, BUILD_FAMILY } from "./detectors/apriltag.js?v=3";
+import { installR1Controls } from "./r1.js?v=3";
 
 const video = document.querySelector("#video");
 const overlay = document.querySelector("#overlay");
@@ -140,7 +140,7 @@ async function scanLoop(now) {
     lastScan = now;
     try {
       // Decode at a modest size for R1 performance.
-      const width = 320;
+      const width = 480;
       const height = Math.round(width * (video.videoHeight / video.videoWidth || .75));
       workCanvas.width = width;
       workCanvas.height = height;

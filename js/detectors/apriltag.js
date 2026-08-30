@@ -10,6 +10,7 @@ const SUPPORTED_FAMILIES = [
 
 let modulePromise = null;
 let detector = null;
+let worker = null;
 
 // The ARENA prebuilt browser detector is compiled for tag36h11 only.
 export const BUILD_FAMILY = "tag36h11";
@@ -22,51 +23,22 @@ export function aprilTagFamilies() {
   return [...SUPPORTED_FAMILIES];
 }
 
-async function loadScript(src) {
-  await new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[data-apriltag="${src}"]`);
-    if (existing) {
-      if (window.Apriltag) return resolve();
-      existing.addEventListener("load", resolve, { once: true });
-      existing.addEventListener("error", reject, { once: true });
-      return;
-    }
-    const s = document.createElement("script");
-    s.src = src;
-    s.dataset.apriltag = src;
-    s.onload = resolve;
-    s.onerror = reject;
-    document.head.appendChild(s);
-  });
-}
-
 export async function initAprilTag() {
   if (modulePromise) return modulePromise;
 
   modulePromise = (async () => {
     try {
-      // Copy the ARENA standalone WASM files into vendor/apriltag/.
-      // Expected files:
-      //   apriltag.js
-      //   apriltag_wasm.js
-      //   apriltag_wasm.wasm
-      //
-      // For v0.1 this detector is tag36h11.
-      await loadScript("./vendor/apriltag/apriltag.js");
-      await loadScript("./vendor/apriltag/apriltag_wasm.js");
+      // ARENA exposes Apriltag through a Web Worker using Comlink. Loading
+      // apriltag.js as a normal page script does not create window.Apriltag.
+      const Comlink = await import("https://unpkg.com/comlink/dist/esm/comlink.mjs");
+      const workerUrl = new URL("../../vendor/apriltag/apriltag.js", import.meta.url);
+      worker = new Worker(workerUrl);
+      const Apriltag = Comlink.wrap(worker);
 
-      if (typeof window.Apriltag !== "function") {
-        throw new Error("Apriltag() global not found");
-      }
-
-      detector = await new Promise((resolve, reject) => {
-        try {
-          let instance;
-          instance = window.Apriltag(() => resolve(instance));
-        } catch (err) {
-          reject(err);
-        }
-      });
+      let signalReady;
+      const ready = new Promise(resolve => { signalReady = resolve; });
+      detector = await new Apriltag(Comlink.proxy(signalReady));
+      await ready;
 
       detector.set_return_pose?.(0);
       detector.set_return_solutions?.(0);
@@ -74,6 +46,8 @@ export async function initAprilTag() {
       return true;
     } catch (err) {
       console.warn("AprilTag WASM not loaded:", err);
+      worker?.terminate();
+      worker = null;
       detector = null;
       return false;
     }

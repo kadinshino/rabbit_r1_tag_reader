@@ -1,5 +1,5 @@
 import { detectQR } from "./detectors/qr.js?v=2";
-import { initAprilTag, detectAprilTags } from "./detectors/apriltag.js?v=2";
+import { initAprilTag, detectAprilTags, isAprilTagReady, BUILD_FAMILY } from "./detectors/apriltag.js?v=2";
 import { installR1Controls } from "./r1.js?v=2";
 
 const video = document.querySelector("#video");
@@ -19,6 +19,7 @@ let stream = null;
 let running = false;
 let starting = false;
 let userStopped = false;
+let aprilReady = false;
 let lastResult = null;
 let scanBusy = false;
 let lastScan = 0;
@@ -36,6 +37,21 @@ function setResult(hit) {
 
 function setStatus(text) {
   resultMeta.textContent = text;
+}
+
+// Explains AprilTag silence instead of failing invisibly.
+function aprilTagWarning() {
+  const wantsTags = mode.value === "apriltag" || mode.value === "auto";
+  if (!wantsTags) return null;
+  if (!aprilReady) return "AprilTag module missing — see vendor/apriltag";
+  if (family.value !== BUILD_FAMILY) return `Build supports ${BUILD_FAMILY} only`;
+  return null;
+}
+
+function refreshIdleStatus() {
+  if (lastResult) return;
+  const warn = aprilTagWarning();
+  setStatus(warn ?? (running ? "Scanning…" : "Ready"));
 }
 
 function showMessage(text) {
@@ -87,7 +103,7 @@ async function startCamera() {
     running = true;
     startBtn.textContent = "STOP";
     showMessage(null);
-    setStatus("Scanning…");
+    refreshIdleStatus();
     requestAnimationFrame(scanLoop);
   } catch (err) {
     stream?.getTracks().forEach(track => track.stop());
@@ -190,7 +206,16 @@ installR1Controls({
 });
 
 // Optional AprilTag module loads in the background; QR keeps working either way.
-initAprilTag();
+initAprilTag().then(ok => {
+  aprilReady = ok && isAprilTagReady();
+  if (!aprilReady) {
+    console.warn("AprilTag detector unavailable: vendor/apriltag WASM not loaded.");
+  }
+  refreshIdleStatus();
+});
+
+mode.addEventListener("change", refreshIdleStatus);
+family.addEventListener("change", refreshIdleStatus);
 
 setResult(null);
 

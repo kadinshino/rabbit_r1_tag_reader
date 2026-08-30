@@ -11,6 +11,13 @@ const SUPPORTED_FAMILIES = [
 let modulePromise = null;
 let detector = null;
 
+// The ARENA prebuilt browser detector is compiled for tag36h11 only.
+export const BUILD_FAMILY = "tag36h11";
+
+export function isAprilTagReady() {
+  return !!detector;
+}
+
 export function aprilTagFamilies() {
   return [...SUPPORTED_FAMILIES];
 }
@@ -78,15 +85,7 @@ export async function initAprilTag() {
 export async function detectAprilTags(imageData, width, height, family) {
   if (!detector) return [];
 
-  // The prebuilt ARENA module used by v0.1 is tag36h11 only.
-  if (family !== "tag36h11") {
-    return [{
-      type: "APRILTAG MODULE",
-      value: `${family} needs multi-family WASM build`,
-      corners: null,
-      meta: "v0.1 prebuilt detector supports tag36h11"
-    }];
-  }
+  if (family !== BUILD_FAMILY) return [];
 
   const rgba = imageData.data;
   const gray = new Uint8Array(width * height);

@@ -23,7 +23,10 @@ let aprilReady = false;
 let lastResult = null;
 let scanBusy = false;
 let lastScan = 0;
+let scanFrameId = 0;
+let lastLoopTick = 0;
 const SCAN_INTERVAL_MS = 180;
+const SCAN_WATCHDOG_MS = 1000;
 
 const ctx = workCanvas.getContext("2d", { willReadFrequently: true });
 const overlayCtx = overlay.getContext("2d");
@@ -82,6 +85,19 @@ function drawHit(hit, sx, sy) {
   overlayCtx.stroke();
 }
 
+function queueScanLoop() {
+  if (!running || scanFrameId) return;
+  scanFrameId = requestAnimationFrame(scanLoop);
+}
+
+function restartScanLoop() {
+  if (!running) return;
+  if (scanFrameId) cancelAnimationFrame(scanFrameId);
+  scanFrameId = 0;
+  lastScan = 0;
+  queueScanLoop();
+}
+
 async function startCamera() {
   if (running || starting) return;
   starting = true;
@@ -104,7 +120,7 @@ async function startCamera() {
     startBtn.textContent = "STOP";
     showMessage(null);
     refreshIdleStatus();
-    requestAnimationFrame(scanLoop);
+    restartScanLoop();
   } catch (err) {
     stream?.getTracks().forEach(track => track.stop());
     stream = null;
@@ -119,6 +135,8 @@ async function startCamera() {
 function stopCamera() {
   userStopped = true;
   running = false;
+  if (scanFrameId) cancelAnimationFrame(scanFrameId);
+  scanFrameId = 0;
   stream?.getTracks().forEach(track => track.stop());
   stream = null;
   video.srcObject = null;
@@ -133,7 +151,9 @@ function toggleCamera() {
 }
 
 async function scanLoop(now) {
+  scanFrameId = 0;
   if (!running) return;
+  lastLoopTick = performance.now();
 
   if (!scanBusy && video.readyState >= 2 && now - lastScan >= SCAN_INTERVAL_MS) {
     scanBusy = true;
@@ -174,7 +194,7 @@ async function scanLoop(now) {
     }
   }
 
-  requestAnimationFrame(scanLoop);
+  queueScanLoop();
 }
 
 startBtn.addEventListener("click", toggleCamera);
@@ -229,6 +249,32 @@ setResult(null);
 
 // Open the camera as soon as the app loads.
 startCamera();
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && !running && !userStopped) startCamera();
-});
+
+async function resumeCameraAndScanner() {
+  if (document.visibilityState !== "visible" || userStopped) return;
+  if (!running) {
+    startCamera();
+    return;
+  }
+
+  try {
+    await video.play();
+  } catch (err) {
+    console.warn("Could not resume camera playback:", err);
+  }
+  restartScanLoop();
+}
+
+video.addEventListener("playing", restartScanLoop);
+document.addEventListener("visibilitychange", resumeCameraAndScanner);
+window.addEventListener("pageshow", resumeCameraAndScanner);
+
+// Some embedded WebViews keep the camera stream alive while dropping the
+// initial animation-frame callback. Restart only when the loop is stale.
+setInterval(() => {
+  if (
+    running &&
+    document.visibilityState === "visible" &&
+    performance.now() - lastLoopTick > SCAN_WATCHDOG_MS
+  ) restartScanLoop();
+}, SCAN_WATCHDOG_MS);

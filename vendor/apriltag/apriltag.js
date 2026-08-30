@@ -53,6 +53,7 @@ class Apriltag {
         this._Module = Module;
         //int atagjs_init(); Init the apriltag detector with default options
         this._init = Module.cwrap('atagjs_init', 'number', []);
+        this._set_family = Module.cwrap('atagjs_set_family', 'number', ['number']);
         //int atagjs_destroy(); Releases resources allocated by the wasm module
         this._destroy = Module.cwrap('atagjs_destroy', 'number', []);
         //int atagjs_set_detector_options(float decimate, float sigma, int nthreads, int refine_edges, int max_detections, int return_pose, int return_solutions); Sets the given detector options
@@ -84,6 +85,12 @@ class Apriltag {
 
         this.onDetectorReadyCallback();
       }
+
+    set_family(family) {
+        const families = { tag36h11: 0, tag16h5: 1 };
+        if (!(family in families)) throw new Error(`Unsupported AprilTag family: ${family}`);
+        return this._set_family(families[family]);
+    }
 
       /**
        * **public** detect method

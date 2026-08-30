@@ -1,19 +1,14 @@
 const SUPPORTED_FAMILIES = [
   "tag36h11",
-  "tagStandard41h12",
-  "tagStandard52h13",
-  "tag25h9",
-  "tag16h5",
-  "tagCircle21h7",
-  "tagCircle49h12"
+  "tag16h5"
 ];
 
 let modulePromise = null;
 let detector = null;
 let worker = null;
+let activeFamily = "tag36h11";
 
-// The ARENA prebuilt browser detector is compiled for tag36h11 only.
-export const BUILD_FAMILY = "tag36h11";
+export const BUILD_FAMILIES = [...SUPPORTED_FAMILIES];
 
 export function isAprilTagReady() {
   return !!detector;
@@ -59,7 +54,7 @@ export async function initAprilTag() {
 export async function detectAprilTags(imageData, width, height, family) {
   if (!detector) return [];
 
-  if (family !== BUILD_FAMILY) return [];
+  if (!await setAprilTagFamily(family)) return [];
 
   const rgba = imageData.data;
   const gray = new Uint8Array(width * height);
@@ -78,4 +73,14 @@ export async function detectAprilTags(imageData, width, height, family) {
     corners: hit.corners,
     meta: `${family} • ID ${hit.id}`
   }));
+}
+
+export async function setAprilTagFamily(family) {
+  if (!detector || !SUPPORTED_FAMILIES.includes(family)) return false;
+  if (family === activeFamily) return true;
+
+  const result = await detector.set_family(family);
+  if (result !== 0) throw new Error(`Could not switch AprilTag family to ${family}`);
+  activeFamily = family;
+  return true;
 }

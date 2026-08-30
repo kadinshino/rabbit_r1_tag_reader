@@ -1,5 +1,5 @@
 import { detectQR } from "./detectors/qr.js?v=3";
-import { initAprilTag, detectAprilTags, isAprilTagReady, BUILD_FAMILY } from "./detectors/apriltag.js?v=3";
+import { initAprilTag, detectAprilTags, isAprilTagReady, setAprilTagFamily, BUILD_FAMILIES } from "./detectors/apriltag.js?v=4";
 import { installR1Controls } from "./r1.js?v=3";
 
 const video = document.querySelector("#video");
@@ -44,7 +44,7 @@ function aprilTagWarning() {
   const wantsTags = mode.value === "apriltag" || mode.value === "auto";
   if (!wantsTags) return null;
   if (!aprilReady) return "AprilTag module missing — see vendor/apriltag";
-  if (family.value !== BUILD_FAMILY) return `Build supports ${BUILD_FAMILY} only`;
+  if (!BUILD_FAMILIES.includes(family.value)) return "Unsupported AprilTag family";
   return null;
 }
 
@@ -215,7 +215,15 @@ initAprilTag().then(ok => {
 });
 
 mode.addEventListener("change", refreshIdleStatus);
-family.addEventListener("change", refreshIdleStatus);
+family.addEventListener("change", async () => {
+  try {
+    if (aprilReady) await setAprilTagFamily(family.value);
+    refreshIdleStatus();
+  } catch (err) {
+    console.error(err);
+    setStatus("Could not switch AprilTag family");
+  }
+});
 
 setResult(null);
 

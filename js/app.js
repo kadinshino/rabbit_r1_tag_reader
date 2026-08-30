@@ -1,6 +1,6 @@
-import { detectQR } from "./detectors/qr.js";
-import { initAprilTag, detectAprilTags } from "./detectors/apriltag.js";
-import { installR1Controls } from "./r1.js";
+import { detectQR } from "./detectors/qr.js?v=2";
+import { initAprilTag, detectAprilTags } from "./detectors/apriltag.js?v=2";
+import { installR1Controls } from "./r1.js?v=2";
 
 const video = document.querySelector("#video");
 const overlay = document.querySelector("#overlay");
